@@ -94,7 +94,9 @@ class TarrowDataset(Dataset):
         self._permute = permute
         self._channels = channels
         self._device = device
+        self._binarize = binarize
         self._augmenter = augmenter
+        self._normalize = normalize
         if self._augmenter is not None:
             self._augmenter.to(device)
     
@@ -106,56 +108,10 @@ class TarrowDataset(Dataset):
                 "Input should be a path to a zarr file."
             )
 
-        # if self._channels == 0:
-        #     imgs = np.expand_dims(imgs, 1)
-        # else:
-        #     imgs = imgs[:, : self._channels, ...]
-
-        # assert imgs.shape[1] == 1
-
-        # if binarize:
-        #     logger.debug("Binarize images")
-        #     imgs = (imgs > 0).astype(np.float32)
-        # else:
-        #     logger.debug("Normalize images")
-        #     if normalize is None:
-        #         imgs = self._default_normalize(imgs)
-        #     else:
-        #         imgs = normalize(imgs)
-
-        # imgs = torch.as_tensor(imgs)
-
         if not isinstance(subsample, int) or subsample < 1:
             raise NotImplementedError(
                 "Spatial subsampling only implemented for positive integer values."
             )
-        # if subsample > 1:
-        #     factors = (1,) + (subsample,) * (imgs.dim() - 1)
-        #     full_size = imgs[0].shape
-        #     imgs = downscale_local_mean(imgs, factors)
-        #     logger.debug(f"Subsampled from {full_size} to {imgs[0].shape}")
-
-        # if size is None:
-        #     self._size = imgs[0, 0].shape
-        # else:
-            # assert np.all(
-            # np.array(size) <= np.array(imgs[0, 0].shape)
-            # ), f"{size=} {imgs[0,0].shape=}"
-            # self._size = size
-
-            # self._size = tuple(min(a, b) for a, b in zip(size, imgs[0, 0].shape))
-
-        # if random_crop:
-        #     if reject_background:
-        #         self._crop = self._reject_background()
-        #     else:
-        #         self._crop = transforms.RandomCrop(
-        #             self._size,
-        #             padding_mode="reflect",
-        #             pad_if_needed=True,
-        #         )
-        # else:
-        #     self._crop = transforms.CenterCrop(self._size)
 
         if self._imgs.ndim != 5:  # T, C, Z, X, Y
             raise NotImplementedError(
@@ -169,17 +125,6 @@ class TarrowDataset(Dataset):
             raise ValueError(
                 f"incompatible shapes between images and size last {n_frames} elements"
             )
-
-        # Precompute the time slices
-        # self._imgs_sequences = []
-        # for delta in self._delta_frames:
-        #     n, k = self._n_frames, delta
-        #     logger.debug(f"Creating delta {delta} crops")
-        #     tslices = tuple(
-        #         slice(i, i + k * (n - 1) + 1, k) for i in range(len(imgs) - (n - 1) * k)
-        #     )
-        #     imgs_sequences = [torch.as_tensor(imgs[ss]) for ss in tslices]
-        #     self._imgs_sequences.extend(imgs_sequences)
 
         self._crops_per_image = max(
             1, int(np.prod(self._imgs.shape[1:3]) / np.prod(self._size))
@@ -273,13 +218,44 @@ class TarrowDataset(Dataset):
         if imgs_shape[3] < self._crop_size[0] or imgs_shape[4] < self._crop_size[1]:
             raise ValueError("Crop size must be smaller than image size")
         
+        # Precompute the time slices
+        self._imgs_sequences = []
+        for delta in self._delta_frames:
+            n, k = self._n_frames, delta
+            logger.debug(f"Creating delta {delta} crops")
+            tslices = tuple(
+                slice(i, i + k * (n - 1) + 1, k) for i in range(imgs_shape[0] - (n - 1) * k)
+            )
+            #imgs_sequences = [torch.as_tensor(self._imgs[ss]) for ss in tslices]
+            #self._imgs_sequences.extend(imgs_sequences)
+        
         # Get a random crop
-        t = np.random.randint(0, imgs_shape[0] - self._n_frames * max(self._delta_frames) + 1)
+        t = np.random.randint(0, len(tslices))
         i = np.random.randint(self._crop_size[0]//2, imgs_shape[3] - self._crop_size[0]//2 + 1)
         j = np.random.randint(self._crop_size[1]//2, imgs_shape[4] - self._crop_size[1]//2 + 1)
 
         # Get the cropped image
-        x = self._imgs[t, :,  0, i - self._crop_size[0]//2:i + self._crop_size[0]//2, j - self._crop_size[1]//2:j + self._crop_size[1]//2]
+        x = self._imgs[tslices[t], :,  0, i - self._crop_size[0]//2:i + self._crop_size[0]//2, j - self._crop_size[1]//2:j + self._crop_size[1]//2]
+
+        # if self._binarize:
+        #     logger.debug("Binarize images")
+        #     x = (x > 0).astype(np.float32)
+        # else:
+        #     # TODO: fix normalization for zarr format
+        #     logger.debug("Normalize images")
+        #     if self._normalize is None:
+        #         x = self._default_normalize(x)
+        #     else:
+        #         x = self._normalize(x)
+
+        #TODO: fix subsampling for zarr format
+        # if self._subsample > 1:
+        #     factors = (1,) + (self._subsample,) * (x.dim() - 1)
+        #     full_size = x[0].shape
+        #     x = downscale_local_mean(x, factors)
+        #     logger.debug(f"Subsampled from {full_size} to {x[0].shape}")
+
+
         x = torch.tensor(x, dtype=torch.float32)
         label = torch.tensor(0, dtype=torch.long)
 
