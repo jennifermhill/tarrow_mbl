@@ -517,7 +517,7 @@ class TimeArrowNet(nn.Module):
                 step_size_up=steps_per_epoch,
                 scale_mode="cycle",
                 scale_fn=lambda x: 0.9**x,
-                verbose=False,
+                # verbose=False,
             )
         else:
             raise ValueError()

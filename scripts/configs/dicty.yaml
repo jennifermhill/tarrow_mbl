@@ -2,18 +2,22 @@ name: dicty
 epochs: 10
 augment: 5
 batchsize: 152
-crop_size: (128, 128)
+random_crop: False
+crop_size: [128, 128]
 channels: 2
 cam_size: 960
 backbone: unet
 features: 32
-train_samples_per_epoch: 100
+train_samples_per_epoch: 1000
+save_checkpoint_every: 1
 num_workers: 12
 projhead: minimal_batchnorm
 classhead: minimal
 frames: 2
 delta:
 - 1
+annotations:
+- /groups/sgro/sgrolab/jennifer/predicty/training_data.json
 input_train:
 - /groups/sgro/sgrolab/jennifer/cryolite/cryolite_mixin_test66_2024-04-30/analysis/max_projections/maxz
 input_val:

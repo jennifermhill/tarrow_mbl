@@ -40,6 +40,7 @@ def get_argparser():
         help="Config file path (other given arguments will superseed this).",
     )
     p.add("--name", type=str, default=None, help="Name of the training run.")
+    p.add("--annotations", type=str, nargs="+", default=None, help="List of json files with annotations.")
     p.add(
         "--input_train",
         type=str,
@@ -107,7 +108,8 @@ def get_argparser():
         default="runs",
         help="Save models and tensorboard here.",
     )
-    p.add("--crop_size", type=tuple, default=(128, 128), help="Patch size for training.")
+    p.add("--random_crop", type=tarrow.utils.str2bool, default=True)
+    p.add("--crop_size", type=int, nargs=2, default=[128, 128], help="Patch size for training.")
     p.add(
         "--cam_size",
         type=int,
@@ -126,14 +128,14 @@ def get_argparser():
             " explicit channel dimension."
         ),
     )
-    p.add(
-        "--reject_background",
-        type=tarrow.utils.str2bool,
-        default=False,
-        help=(
-            "Set to `True` to heuristically reject background patches during training."
-        ),
-    )
+    # p.add(
+    #     "--reject_background",
+    #     type=tarrow.utils.str2bool,
+    #     default=False,
+    #     help=(
+    #         "Set to `True` to heuristically reject background patches during training."
+    #     ),
+    # )
     p.add(
         "--cam_subsampling",
         type=int,
@@ -244,8 +246,7 @@ def _build_dataset(
     delta_frames,
     augmenter=None,
     permute=True,
-    random_crop=True,
-    reject_background=False,
+    random_crop=True
 ):
     return TarrowDataset(
         imgs=imgs,
@@ -263,7 +264,6 @@ def _build_dataset(
         binarize=args.binarize,
         crop_size=args.crop_size,
         random_crop=random_crop,
-        reject_background=reject_background,
     )
 
 
@@ -407,7 +407,7 @@ def main(args):
             n_frames=args.frames,
             delta_frames=args.delta,
             augmenter=augmenter,
-            reject_background=args.reject_background,
+            random_crop=args.random_crop,
         )
         for split in args.split_train
         for inp in inputs["train"]

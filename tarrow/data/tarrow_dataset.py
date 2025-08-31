@@ -34,7 +34,8 @@ class TarrowDataset(Dataset):
         channels=0,
         device="cpu",
         binarize=False,
-        crop_size=(128, 128),
+        crop_size=[128, 128],
+        random_crop=True
     ):
         """Returns 2d+time crops. The image sequence is stored in-memory.
 
@@ -94,6 +95,7 @@ class TarrowDataset(Dataset):
         self._binarize = binarize
         self._augmenter = augmenter
         self._normalize = normalize
+        self._random_crop = random_crop
         if self._augmenter is not None:
             self._augmenter.to(device)
     
@@ -197,9 +199,10 @@ class TarrowDataset(Dataset):
             )
         
         # Get a random crop
-        t = np.random.randint(0, len(tslices))
-        i = np.random.randint(self._crop_size[0]//2, imgs_shape[3] - self._crop_size[0]//2 + 1)
-        j = np.random.randint(self._crop_size[1]//2, imgs_shape[4] - self._crop_size[1]//2 + 1)
+        if self._random_crop:
+            t = np.random.randint(0, len(tslices))
+            i = np.random.randint(self._crop_size[0]//2, imgs_shape[3] - self._crop_size[0]//2 + 1)
+            j = np.random.randint(self._crop_size[1]//2, imgs_shape[4] - self._crop_size[1]//2 + 1)
 
         # Get the cropped image
         x = self._imgs[tslices[t], :,  0, i - self._crop_size[0]//2:i + self._crop_size[0]//2, j - self._crop_size[1]//2:j + self._crop_size[1]//2]
