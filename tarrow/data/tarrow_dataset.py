@@ -119,7 +119,7 @@ class TarrowDataset(Dataset):
             )
         self._size = self._imgs.shape[3:]
         min_number = max(self._delta_frames) * (n_frames - 1) + 1
-        if len(self._imgs[0]) < min_number:
+        if self._imgs.shape[0] < min_number:
             raise ValueError(f"imgs should contain at least {min_number} elements")
         if len(self._imgs.shape[3:]) != len(self._size):
             raise ValueError(
