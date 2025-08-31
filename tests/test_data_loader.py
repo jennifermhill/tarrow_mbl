@@ -1,18 +1,20 @@
 # %%
 from tarrow.data import TarrowDataset
+from tarrow.data import get_augmenter
+import matplotlib.pyplot as plt
+import torch
 
+augmenter = get_augmenter(5)
 dataset = TarrowDataset(
-    imgs="/Volumes/sgrolab/jennifer/cryolite/cryolite_mixin_test65_2024-04-16/WS205_overnight_day2/2024-04-17_ERH_mixin65_plate2_WS205_overnight_day2_ERH Red FarRed/analysis/max_projections/maxz",
+    imgs="/mnt/efs/aimbl_2025/student_data/S-CV/pre/zarr/C02",
     delta_frames=[1],
+    augmenter=augmenter
     )
 
-img = dataset[0]
-img[0].shape
 
-# %%
+img, label = dataset
+print(img.shape)
 
-
-
-# %%
+plt.imshow(torch.squeeze(img)[0])
 
 # %%

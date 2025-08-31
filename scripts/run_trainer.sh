@@ -1,0 +1,1 @@
+python3 train.py --config hela.yaml --name cviets_train_test --
