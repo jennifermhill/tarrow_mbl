@@ -86,6 +86,7 @@ class TarrowDataset(Dataset):
         self._n_frames = n_frames
         self._delta_frames = delta_frames
         self._subsample = subsample
+        self._crop_size = crop_size
 
         assert mode in ["flip", "roll"]
         self._mode = mode
@@ -98,7 +99,7 @@ class TarrowDataset(Dataset):
             self._augmenter.to(device)
     
         if isinstance(imgs, (str, Path)):
-            imgs = self._load_zarr(path=imgs)
+            self._imgs = self._load_zarr(path=imgs)
         else:
             raise ValueError(
                 f"Cannot form a dataset from {imgs}. "
@@ -156,14 +157,15 @@ class TarrowDataset(Dataset):
         # else:
         #     self._crop = transforms.CenterCrop(self._size)
 
-        if imgs.ndim != 4:  # T, C, X, Y
+        if self._imgs.ndim != 5:  # T, C, Z, X, Y
             raise NotImplementedError(
-                f"only 2D timelapses supported (total image shape: {imgs.shape})"
+                f"only ome-zarr format supported (total image shape: {imgs.shape})"
             )
+        self._size = self._imgs.shape[3:]
         min_number = max(self._delta_frames) * (n_frames - 1) + 1
-        if len(imgs) < min_number:
+        if len(self._imgs[0]) < min_number:
             raise ValueError(f"imgs should contain at least {min_number} elements")
-        if len(imgs.shape[2:]) != len(self._size):
+        if len(self._imgs.shape[3:]) != len(self._size):
             raise ValueError(
                 f"incompatible shapes between images and size last {n_frames} elements"
             )
@@ -180,7 +182,7 @@ class TarrowDataset(Dataset):
         #     self._imgs_sequences.extend(imgs_sequences)
 
         self._crops_per_image = max(
-            1, int(np.prod(imgs.shape[1:3]) / np.prod(self._size))
+            1, int(np.prod(self._imgs.shape[1:3]) / np.prod(self._size))
         )
 
     def _reject_background(self, threshold=0.02, max_iterations=10):
@@ -237,47 +239,48 @@ class TarrowDataset(Dataset):
     def __len__(self):
         return len(self._imgs_sequences)
 
-    def __getitem__(self, idx):
-        if isinstance(idx, (list, tuple)):
-            return list(self[_idx] for _idx in idx)
+    # def __getitem__(self, idx):
+    #     if isinstance(idx, (list, tuple)):
+    #         return list(self[_idx] for _idx in idx)
 
-        x = self._imgs_sequences[idx]
+    #     x = self._imgs_sequences[idx]
 
-        x = self._crop(x)
+    #     x = self._crop(x)
 
-        if self._permute:
-            if self._mode == "flip":
-                label = torch.randint(0, 2, (1,))[0]
-                if label == 1:
-                    x = torch.flip(x, dims=(0,))
-            elif self._mode == "roll":
-                label = torch.randint(0, self._n_frames, (1,))[0]
-                x = torch.roll(x, label.item(), dims=(0,))
-            else:
-                raise ValueError()
-        else:
-            label = torch.tensor(0, dtype=torch.long)
+    #     if self._permute:
+    #         if self._mode == "flip":
+    #             label = torch.randint(0, 2, (1,))[0]
+    #             if label == 1:
+    #                 x = torch.flip(x, dims=(0,))
+    #         elif self._mode == "roll":
+    #             label = torch.randint(0, self._n_frames, (1,))[0]
+    #             x = torch.roll(x, label.item(), dims=(0,))
+    #         else:
+    #             raise ValueError()
+    #     else:
+    #         label = torch.tensor(0, dtype=torch.long)
 
-        x, label = x.to(self._device), label.to(self._device)
+    #     x, label = x.to(self._device), label.to(self._device)
 
-        if self._augmenter is not None:
-            x = self._augmenter(x)
+    #     if self._augmenter is not None:
+    #         x = self._augmenter(x)
 
-        return x, label
+    #     return x, label
     
-    def __get_item__(self, imgs, crop_size):
+    def __getitem__(self, idx):
 
-        imgs_shape = imgs.shape
-        if imgs_shape[2] < crop_size[0] or imgs_shape[3] < crop_size[1]:
+        imgs_shape = self._imgs.shape
+        if imgs_shape[3] < self._crop_size[0] or imgs_shape[4] < self._crop_size[1]:
             raise ValueError("Crop size must be smaller than image size")
         
         # Get a random crop
-        t = torch.randint(0, imgs_shape[0] - self._n_frames * max(self._delta_frames) + 1)
-        i = torch.randint(0, imgs_shape[2] - crop_size[0] + 1)
-        j = torch.randint(0, imgs_shape[3] - crop_size[1] + 1)
+        t = np.random.randint(0, imgs_shape[0] - self._n_frames * max(self._delta_frames) + 1)
+        i = np.random.randint(self._crop_size[0]//2, imgs_shape[3] - self._crop_size[0]//2 + 1)
+        j = np.random.randint(self._crop_size[1]//2, imgs_shape[4] - self._crop_size[1]//2 + 1)
 
         # Get the cropped image
-        x = imgs[t, :, i:i + crop_size[0], j:j + crop_size[1]]
+        x = self._imgs[t, :,  0, i - self._crop_size[0]//2:i + self._crop_size[0]//2, j - self._crop_size[1]//2:j + self._crop_size[1]//2]
+        x = torch.tensor(x, dtype=torch.float32)
         label = torch.tensor(0, dtype=torch.long)
 
         x, label = x.to(self._device), label.to(self._device)
