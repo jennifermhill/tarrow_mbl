@@ -179,7 +179,7 @@ class TarrowDataset(Dataset):
         return imgs
 
     def __len__(self):
-        return len(self._imgs_sequences)
+        return self._imgs.shape[0]
     
     def __getitem__(self, idx):
 
