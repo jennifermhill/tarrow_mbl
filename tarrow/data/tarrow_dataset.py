@@ -3,6 +3,7 @@ from pathlib import Path
 import bisect
 from tqdm import tqdm
 import tifffile
+import zarr
 import imageio
 import numpy as np
 import torch
@@ -34,6 +35,7 @@ class TarrowDataset(Dataset):
         channels=0,
         device="cpu",
         binarize=False,
+        crop_size=[128, 128],
         random_crop=True,
         reject_background=False,
     ):
@@ -94,74 +96,65 @@ class TarrowDataset(Dataset):
         self._augmenter = augmenter
         if self._augmenter is not None:
             self._augmenter.to(device)
-
+    
         if isinstance(imgs, (str, Path)):
-            imgs = self._load(
-                path=imgs,
-                split_start=split_start,
-                split_end=split_end,
-                n_images=n_images,
-            )
-        elif isinstance(imgs, (tuple, list, np.ndarray)) and isinstance(
-            imgs[0], np.ndarray
-        ):
-            imgs = np.asarray(imgs)[:n_images]
+            imgs = self._load_zarr(path=imgs)
         else:
             raise ValueError(
                 f"Cannot form a dataset from {imgs}. "
-                "Input should be either a path to a sequence of 2d images, a single 2d+time image, or a list of 2d np.ndarrays."
+                "Input should be a path to a zarr file."
             )
 
-        if self._channels == 0:
-            imgs = np.expand_dims(imgs, 1)
-        else:
-            imgs = imgs[:, : self._channels, ...]
+        # if self._channels == 0:
+        #     imgs = np.expand_dims(imgs, 1)
+        # else:
+        #     imgs = imgs[:, : self._channels, ...]
 
-        assert imgs.shape[1] == 1
+        # assert imgs.shape[1] == 1
 
-        if binarize:
-            logger.debug("Binarize images")
-            imgs = (imgs > 0).astype(np.float32)
-        else:
-            logger.debug("Normalize images")
-            if normalize is None:
-                imgs = self._default_normalize(imgs)
-            else:
-                imgs = normalize(imgs)
+        # if binarize:
+        #     logger.debug("Binarize images")
+        #     imgs = (imgs > 0).astype(np.float32)
+        # else:
+        #     logger.debug("Normalize images")
+        #     if normalize is None:
+        #         imgs = self._default_normalize(imgs)
+        #     else:
+        #         imgs = normalize(imgs)
 
-        imgs = torch.as_tensor(imgs)
+        # imgs = torch.as_tensor(imgs)
 
         if not isinstance(subsample, int) or subsample < 1:
             raise NotImplementedError(
                 "Spatial subsampling only implemented for positive integer values."
             )
-        if subsample > 1:
-            factors = (1,) + (subsample,) * (imgs.dim() - 1)
-            full_size = imgs[0].shape
-            imgs = downscale_local_mean(imgs, factors)
-            logger.debug(f"Subsampled from {full_size} to {imgs[0].shape}")
+        # if subsample > 1:
+        #     factors = (1,) + (subsample,) * (imgs.dim() - 1)
+        #     full_size = imgs[0].shape
+        #     imgs = downscale_local_mean(imgs, factors)
+        #     logger.debug(f"Subsampled from {full_size} to {imgs[0].shape}")
 
-        if size is None:
-            self._size = imgs[0, 0].shape
-        else:
+        # if size is None:
+        #     self._size = imgs[0, 0].shape
+        # else:
             # assert np.all(
             # np.array(size) <= np.array(imgs[0, 0].shape)
             # ), f"{size=} {imgs[0,0].shape=}"
             # self._size = size
 
-            self._size = tuple(min(a, b) for a, b in zip(size, imgs[0, 0].shape))
+            # self._size = tuple(min(a, b) for a, b in zip(size, imgs[0, 0].shape))
 
-        if random_crop:
-            if reject_background:
-                self._crop = self._reject_background()
-            else:
-                self._crop = transforms.RandomCrop(
-                    self._size,
-                    padding_mode="reflect",
-                    pad_if_needed=True,
-                )
-        else:
-            self._crop = transforms.CenterCrop(self._size)
+        # if random_crop:
+        #     if reject_background:
+        #         self._crop = self._reject_background()
+        #     else:
+        #         self._crop = transforms.RandomCrop(
+        #             self._size,
+        #             padding_mode="reflect",
+        #             pad_if_needed=True,
+        #         )
+        # else:
+        #     self._crop = transforms.CenterCrop(self._size)
 
         if imgs.ndim != 4:  # T, C, X, Y
             raise NotImplementedError(
@@ -169,22 +162,22 @@ class TarrowDataset(Dataset):
             )
         min_number = max(self._delta_frames) * (n_frames - 1) + 1
         if len(imgs) < min_number:
-            raise ValueError(f"imgs should contain at last {min_number} elements")
+            raise ValueError(f"imgs should contain at least {min_number} elements")
         if len(imgs.shape[2:]) != len(self._size):
             raise ValueError(
                 f"incompatible shapes between images and size last {n_frames} elements"
             )
 
         # Precompute the time slices
-        self._imgs_sequences = []
-        for delta in self._delta_frames:
-            n, k = self._n_frames, delta
-            logger.debug(f"Creating delta {delta} crops")
-            tslices = tuple(
-                slice(i, i + k * (n - 1) + 1, k) for i in range(len(imgs) - (n - 1) * k)
-            )
-            imgs_sequences = [torch.as_tensor(imgs[ss]) for ss in tslices]
-            self._imgs_sequences.extend(imgs_sequences)
+        # self._imgs_sequences = []
+        # for delta in self._delta_frames:
+        #     n, k = self._n_frames, delta
+        #     logger.debug(f"Creating delta {delta} crops")
+        #     tslices = tuple(
+        #         slice(i, i + k * (n - 1) + 1, k) for i in range(len(imgs) - (n - 1) * k)
+        #     )
+        #     imgs_sequences = [torch.as_tensor(imgs[ss]) for ss in tslices]
+        #     self._imgs_sequences.extend(imgs_sequences)
 
         self._crops_per_image = max(
             1, int(np.prod(imgs.shape[1:3]) / np.prod(self._size))
@@ -233,84 +226,12 @@ class TarrowDataset(Dataset):
             imgs_norm.append(utils_normalize(img, subsample=8))
         return np.stack(imgs_norm)
 
-    def _load(self, path, split_start, split_end, n_images=None):
-        """Loads image from disk into CPU memory.
+    def _load_zarr(self, path):
 
-        Can be overwritten in subclass for particular datasets.
+        logger.info(f"Loading {path}")
+        imgs = zarr.open(str(path), mode="r")
+        logger.info("Done")
 
-        Args:
-            path(``str``):
-                Dataset directory.
-            split_start(``float``):
-                Use only images after this fraction of the dataset. Defaults to 0.
-            split_end(``float``):
-                Use only images before this fraction of the dataset. Defaults to 1.
-            n_images(``int``):
-                Limit number of used images. Set to ``None`` to use all avaible images.
-
-        Returns:
-            Numpy array of shape(imgs, dim0, dim1, ... , dimN).
-        """
-
-        assert split_start >= 0
-        assert split_end <= 1
-
-        inp = Path(path).expanduser()
-
-        if inp.is_dir():
-            suffixes = ("png", "jpg", "tif", "tiff")
-            for s in suffixes:
-                fnames = sorted(Path(inp).glob(f"*.{s}"))
-                if len(fnames) > 0:
-                    break
-            if len(fnames) == 0:
-                raise ValueError(f"Could not find ay images in {inp}")
-
-            fnames = fnames[:n_images]
-            imgs = self._load_image_folder(fnames, split_start, split_end)
-
-        elif inp.suffix == ".tif" or inp.suffix == ".tiff":
-            logger.info(f"Loading {inp}")
-            imgs = tifffile.imread(str(inp))
-            logger.info("Done")
-            assert imgs.ndim == 3
-            imgs = imgs[int(len(imgs) * split_start) : int(len(imgs) * split_end)]
-            imgs = imgs[:n_images]
-        else:
-            raise ValueError(
-                (
-                    f"Cannot form a dataset from {inp}. "
-                    "Input should be either a path to a sequence of 2d images, a single 2d+time image, or a list of 2d np.ndarrays."
-                )
-            )
-
-        return imgs
-
-    def _load_image_folder(
-        self,
-        fnames,
-        split_start: float,
-        split_end: float,
-    ) -> np.ndarray:
-        idx_start = int(len(fnames) * split_start)
-        idx_end = int(len(fnames) * split_end)
-        fnames = fnames[idx_start:idx_end]
-
-        logger.info(f"Load images {idx_start}-{idx_end}")
-        imgs = []
-        for f in tqdm(fnames, leave=False, desc="loading images"):
-            f = Path(f)
-            if f.suffix in (".tif", ".TIFF", ".tiff"):
-                x = tifffile.imread(f)
-            elif f.suffix in (".png", ".jpg", ".jpeg"):
-                x = imageio.imread(f)
-                if x.ndim == 3:
-                    x = np.moveaxis(x[..., :3], -1, 0)
-            else:
-                continue
-            x = np.squeeze(x)
-            imgs.append(x)
-        imgs = np.stack(imgs)
         return imgs
 
     def __len__(self):
@@ -342,6 +263,24 @@ class TarrowDataset(Dataset):
         if self._augmenter is not None:
             x = self._augmenter(x)
 
+        return x, label
+    
+    def __get_item__(self, imgs, crop_size):
+
+        imgs_shape = imgs.shape
+        if imgs_shape[2] < crop_size[0] or imgs_shape[3] < crop_size[1]:
+            raise ValueError("Crop size must be smaller than image size")
+        
+        # Get a random crop
+        t = torch.randint(0, imgs_shape[0] - self._n_frames * max(self._delta_frames) + 1)
+        i = torch.randint(0, imgs_shape[2] - crop_size[0] + 1)
+        j = torch.randint(0, imgs_shape[3] - crop_size[1] + 1)
+
+        # Get the cropped image
+        x = imgs[t, :, i:i + crop_size[0], j:j + crop_size[1]]
+        label = torch.tensor(0, dtype=torch.long)
+
+        x, label = x.to(self._device), label.to(self._device)
         return x, label
 
 
