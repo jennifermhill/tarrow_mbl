@@ -25,7 +25,7 @@ We provide TAP training and inference methods as the python package `tarrow`, wh
 - Activate the environment: `mamba activate tarrow`.
 - Pip install the `tarrow` python package directly from this GitHub repository:
 ```
-pip install git+https://github.com/weigertlab/tarrow.git
+pip install git+https://github.com/jennifermhill/tarrow_mbl
 ```
 
 
