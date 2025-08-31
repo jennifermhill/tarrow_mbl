@@ -1,0 +1,26 @@
+name: dicty
+epochs: 10
+augment: 5
+batchsize: 152
+crop_size: (128, 128)
+channels: 2
+cam_size: 960
+backbone: unet
+features: 32
+train_samples_per_epoch: 100
+num_workers: 12
+projhead: minimal_batchnorm
+classhead: minimal
+frames: 2
+delta:
+- 1
+input_train:
+- /groups/sgro/sgrolab/jennifer/cryolite/cryolite_mixin_test66_2024-04-30/analysis/max_projections/maxz
+input_val:
+- /groups/sgro/sgrolab/jennifer/cryolite/cryolite_mixin_test62_2024-03-08/analysis/max_projections/maxz
+split_train:
+- - 0.0
+  - 1.0
+split_val:
+- 0.0
+- 1.0
