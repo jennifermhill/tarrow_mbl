@@ -183,34 +183,6 @@ class TarrowDataset(Dataset):
 
     def __len__(self):
         return len(self._imgs_sequences)
-
-    # def __getitem__(self, idx):
-    #     if isinstance(idx, (list, tuple)):
-    #         return list(self[_idx] for _idx in idx)
-
-    #     x = self._imgs_sequences[idx]
-
-    #     x = self._crop(x)
-
-    #     if self._permute:
-    #         if self._mode == "flip":
-    #             label = torch.randint(0, 2, (1,))[0]
-    #             if label == 1:
-    #                 x = torch.flip(x, dims=(0,))
-    #         elif self._mode == "roll":
-    #             label = torch.randint(0, self._n_frames, (1,))[0]
-    #             x = torch.roll(x, label.item(), dims=(0,))
-    #         else:
-    #             raise ValueError()
-    #     else:
-    #         label = torch.tensor(0, dtype=torch.long)
-
-    #     x, label = x.to(self._device), label.to(self._device)
-
-    #     if self._augmenter is not None:
-    #         x = self._augmenter(x)
-
-    #     return x, label
     
     def __getitem__(self, idx):
 
@@ -226,8 +198,6 @@ class TarrowDataset(Dataset):
             tslices = tuple(
                 slice(i, i + k * (n - 1) + 1, k) for i in range(imgs_shape[0] - (n - 1) * k)
             )
-            #imgs_sequences = [torch.as_tensor(self._imgs[ss]) for ss in tslices]
-            #self._imgs_sequences.extend(imgs_sequences)
         
         # Get a random crop
         t = np.random.randint(0, len(tslices))
@@ -237,27 +207,40 @@ class TarrowDataset(Dataset):
         # Get the cropped image
         x = self._imgs[tslices[t], :,  0, i - self._crop_size[0]//2:i + self._crop_size[0]//2, j - self._crop_size[1]//2:j + self._crop_size[1]//2]
 
-        # if self._binarize:
-        #     logger.debug("Binarize images")
-        #     x = (x > 0).astype(np.float32)
-        # else:
-        #     # TODO: fix normalization for zarr format
-        #     logger.debug("Normalize images")
-        #     if self._normalize is None:
-        #         x = self._default_normalize(x)
-        #     else:
-        #         x = self._normalize(x)
-
-        #TODO: fix subsampling for zarr format
-        # if self._subsample > 1:
-        #     factors = (1,) + (self._subsample,) * (x.dim() - 1)
-        #     full_size = x[0].shape
-        #     x = downscale_local_mean(x, factors)
-        #     logger.debug(f"Subsampled from {full_size} to {x[0].shape}")
-
+        if self._binarize:
+            logger.debug("Binarize images")
+            x = (x > 0).astype(np.float32)
+        else:
+            logger.debug("Normalize images")
+            if self._normalize is None:
+                x = self._default_normalize(x)
+            else:
+                x = self._normalize(x)
 
         x = torch.tensor(x, dtype=torch.float32)
-        label = torch.tensor(0, dtype=torch.long)
+
+        if self._subsample > 1:
+            factors = (1,) + (self._subsample,) * (x.dim() - 2)
+            full_size = x[0].shape
+            x = downscale_local_mean(x, factors)
+            logger.debug(f"Subsampled from {full_size} to {x[0].shape}")
+
+        if self._permute:
+            if self._mode == "flip":
+                label = torch.randint(0, 2, (1,))[0]
+                if label == 1:
+                    x = torch.flip(x, dims=(0,))
+            elif self._mode == "roll":
+                label = torch.randint(0, self._n_frames, (1,))[0]
+                x = torch.roll(x, label.item(), dims=(0,))
+            else:
+                raise ValueError()
+        else:
+            label = torch.tensor(0, dtype=torch.long)
+
+
+        if self._augmenter is not None:
+            x = self._augmenter(x)
 
         x, label = x.to(self._device), label.to(self._device)
         return x, label
