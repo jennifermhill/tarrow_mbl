@@ -387,7 +387,6 @@ def main(args):
         _build_dataset(
             inp,
             split=(0, 1.0),
-            size=None if args.cam_size is None else (args.cam_size,) * args.ndim,
             args=args,
             n_frames=args.frames,
             delta_frames=args.delta[-1:],
@@ -404,7 +403,6 @@ def main(args):
         _build_dataset(
             inp,
             split=split,
-            size=(args.size,) * args.ndim,
             args=args,
             n_frames=args.frames,
             delta_frames=args.delta,
@@ -421,7 +419,6 @@ def main(args):
             _build_dataset(
                 inp,
                 split,
-                size=(args.size,) * args.ndim,
                 args=args,
                 n_frames=args.frames,
                 delta_frames=args.delta,
