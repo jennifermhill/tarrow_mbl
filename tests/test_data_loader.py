@@ -11,7 +11,7 @@ aug = get_augmenter(5)
 
 augmenter = get_augmenter(5)
 dataset = TarrowDataset(
-    imgs="/mnt/efs/aimbl_2025/student_data/S-CV/pre/zarr/C02",
+    imgs="/Volumes/sgrolab/jennifer/cryolite/cryolite_mixin_test66_2024-04-30/ERH_2024-04-30_mixin66_plate1_day1_ERH Red FarRed.zarr",
     delta_frames=[1],
     mode="flip",
     augmenter=aug,

@@ -27,7 +27,6 @@ class TarrowDataset(Dataset):
         n_frames=2,
         delta_frames=[1],
         subsample=1,
-        size=None,
         mode="flip",
         permute=True,
         augmenter=None,
@@ -35,9 +34,7 @@ class TarrowDataset(Dataset):
         channels=0,
         device="cpu",
         binarize=False,
-        crop_size=[128, 128],
-        random_crop=True,
-        reject_background=False,
+        crop_size=(128, 128),
     ):
         """Returns 2d+time crops. The image sequence is stored in-memory.
 

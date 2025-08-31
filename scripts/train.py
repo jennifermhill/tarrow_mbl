@@ -107,7 +107,7 @@ def get_argparser():
         default="runs",
         help="Save models and tensorboard here.",
     )
-    p.add("--size", type=int, default=96, help="Patch size for training.")
+    p.add("--crop_size", type=tuple, default=(128, 128), help="Patch size for training.")
     p.add(
         "--cam_size",
         type=int,
@@ -239,7 +239,6 @@ def _get_paths_recursive(paths: Sequence[str], level: int):
 def _build_dataset(
     imgs,
     split,
-    size,
     args,
     n_frames,
     delta_frames,
@@ -256,13 +255,13 @@ def _build_dataset(
         n_frames=n_frames,
         delta_frames=delta_frames,
         subsample=args.subsample,
-        size=size,
         mode="flip",
         permute=permute,
         augmenter=augmenter,
         device="cpu",
         channels=args.channels,
         binarize=args.binarize,
+        crop_size=args.crop_size,
         random_crop=random_crop,
         reject_background=reject_background,
     )
