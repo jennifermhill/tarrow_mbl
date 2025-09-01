@@ -1,5 +1,6 @@
 /data
 /scripts/runs
+/runs
 
 __pycache__/
 *.py[cod]
