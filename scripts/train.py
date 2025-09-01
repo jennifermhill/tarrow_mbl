@@ -107,11 +107,10 @@ def get_argparser():
         default="runs",
         help="Save models and tensorboard here.",
     )
-    p.add("--size", type=int, default=96, help="Patch size for training.")
+    p.add("--size", type=int, default=96, help="1D patch size for training.")
+    p.add("--crop_size", type=int, nargs=2, default=[128,128], help="Patch size for training")
     p.add(
-        "--cam_size",
-        type=int,
-        default=None,
+        "--cam_size", type=int, nargs=2, default=[128,128],
         help="Patch size for CAM visualization. If not given, full images are used.",
     )
     p.add("--batchsize", type=int, default=128)
@@ -124,14 +123,6 @@ def get_argparser():
         help=(
             "Number of channels in the input images. Set to 0 for images do not have a"
             " explicit channel dimension."
-        ),
-    )
-    p.add(
-        "--reject_background",
-        type=tarrow.utils.str2bool,
-        default=False,
-        help=(
-            "Set to `True` to heuristically reject background patches during training."
         ),
     )
     p.add(
@@ -239,14 +230,13 @@ def _get_paths_recursive(paths: Sequence[str], level: int):
 def _build_dataset(
     imgs,
     split,
-    size,
+    crop_size,
     args,
     n_frames,
     delta_frames,
     augmenter=None,
     permute=True,
     random_crop=True,
-    reject_background=False,
 ):
     return TarrowDataset(
         imgs=imgs,
@@ -256,22 +246,19 @@ def _build_dataset(
         n_frames=n_frames,
         delta_frames=delta_frames,
         subsample=args.subsample,
-        size=size,
+        crop_size=crop_size,
         mode="flip",
         permute=permute,
         augmenter=augmenter,
         device="cpu",
         channels=args.channels,
         binarize=args.binarize,
-        random_crop=random_crop,
-        reject_background=reject_background,
+        random_crop=random_crop
     )
-
 
 def _subset(data: Dataset, split=(0, 1.0)):
     low, high = int(len(data) * split[0]), int(len(data) * split[1])
     return Subset(data, range(low, high))
-
 
 def _create_loader(dataset, args, num_samples, num_workers, idx=None, sequential=False):
     return torch.utils.data.DataLoader(
@@ -383,19 +370,20 @@ def main(args):
         inputs[phase] = _get_paths_recursive(inp, args.read_recursion_level)
         logger.debug(f"{phase} datasets: {inputs[phase]}")
 
-    logger.info("Build visualisation datasets.")
+    # logger.info("Build visualisation datasets.")
+    logger.info("Build visualization datasets.")
     data_visuals = tuple(
         _build_dataset(
             inp,
             split=(0, 1.0),
-            size=None if args.cam_size is None else (args.cam_size,) * args.ndim,
+            crop_size=None if args.cam_size is None else args.cam_size,
             args=args,
             n_frames=args.frames,
             delta_frames=args.delta[-1:],
             permute=False,
             random_crop=False,
         )
-        for inp in set([inputs["train"][0], inputs["val"][0]])
+        for inp in [[inputs["train"][0], inputs["val"][0]]]
         # for inp in set([*inputs["train"], *inputs["val"]])
         # for inp in inputs["val"][-1:]
     )
@@ -405,12 +393,11 @@ def main(args):
         _build_dataset(
             inp,
             split=split,
-            size=(args.size,) * args.ndim,
+            crop_size=args.crop_size,
             args=args,
             n_frames=args.frames,
             delta_frames=args.delta,
-            augmenter=augmenter,
-            reject_background=args.reject_background,
+            augmenter=augmenter
         )
         for split in args.split_train
         for inp in inputs["train"]
@@ -422,7 +409,7 @@ def main(args):
             _build_dataset(
                 inp,
                 split,
-                size=(args.size,) * args.ndim,
+                crop_size=args.crop_size,
                 args=args,
                 n_frames=args.frames,
                 delta_frames=args.delta,

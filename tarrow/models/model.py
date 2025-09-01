@@ -426,9 +426,9 @@ class TimeArrowNet(nn.Module):
             tb_writer: Tensorboard writer.
             phase: 'train' or 'val'.
         """
-        logger.info("Write example images to tensorboard.")
+        # logger.info("Write example images to tensorboard.")
         example_imgs, _ = next(iter(loader))
-        logger.debug(f"{example_imgs.shape=}")
+        # logger.debug(f"{example_imgs.shape=}")
 
         def write_to_tb(imgs, name):
             # only first channel
@@ -516,8 +516,7 @@ class TimeArrowNet(nn.Module):
                 cycle_momentum=False,
                 step_size_up=steps_per_epoch,
                 scale_mode="cycle",
-                scale_fn=lambda x: 0.9**x,
-                verbose=False,
+                scale_fn=lambda x: 0.9**x
             )
         else:
             raise ValueError()

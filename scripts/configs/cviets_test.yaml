@@ -1,0 +1,23 @@
+name: Exp001
+epochs: 10
+augment: 5
+batchsize: 25
+crop_size: [128, 128]
+delta: [1]
+frames: 5
+visual_dataset_frequency: 1
+cam_subsampling: 2
+backbone: unet
+features: 32
+train_samples_per_epoch: 50000
+val_samples_per_epoch: 2000
+num_workers: 8
+projhead: minimal_batchnorm
+classhead: minimal
+input_train: /mnt/efs/aimbl_2025/student_data/S-CV/pre/zarr/C02
+split_train:
+- - 0.0
+  - 1.0
+split_val:
+- 0.0
+- 1.0
