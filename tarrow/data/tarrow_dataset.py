@@ -2,15 +2,11 @@ import logging
 from pathlib import Path
 import bisect
 from tqdm import tqdm
-import tifffile
 import zarr
-import imageio
 import numpy as np
 import torch
 from torch.utils.data import Dataset, ConcatDataset
-from torchvision import transforms
 from skimage.transform import downscale_local_mean
-import skimage
 from ..utils import normalize as utils_normalize
 
 logger = logging.getLogger(__name__)
@@ -21,8 +17,8 @@ class TarrowDataset(Dataset):
     def __init__(
         self,
         imgs,
-        split_start=0,
-        split_end=1,
+        split_start=None,
+        split_end=None,
         n_images=None,
         n_frames=2,
         delta_frames=[1],
@@ -79,14 +75,13 @@ class TarrowDataset(Dataset):
         """
 
         super().__init__()
-
-        self._split_start = split_start
-        self._split_end = split_end
+        
         self._n_images = n_images
         self._n_frames = n_frames
         self._delta_frames = delta_frames
         self._subsample = subsample
-        self._crop_size = crop_size
+
+        self.random_crop = random_crop
 
         assert mode in ["flip", "roll"]
         self._mode = mode
@@ -105,11 +100,28 @@ class TarrowDataset(Dataset):
     
         if isinstance(imgs, (str, Path)):
             self._imgs = self._load_zarr(path=imgs)
+
+            if split_start is None:
+                self._split_start = 0
+            else:
+                self._split_start = split_start
+
+            if split_end is None:
+                self._split_end = self._imgs.shape[0]
+            else:
+                self._split_end = split_end
+            
+            self._imgs = self._imgs[split_start:split_end]
         else:
             raise ValueError(
                 f"Cannot form a dataset from {imgs}. "
                 "Input should be a path to a zarr file."
             )
+        if crop_size is not None:
+            self._crop_size = crop_size
+        else:
+            imgs_shape = self._imgs.shape
+            self._crop_size = [imgs_shape[3], imgs_shape[4]]
 
         if not isinstance(subsample, int) or subsample < 1:
             raise NotImplementedError(
@@ -140,31 +152,41 @@ class TarrowDataset(Dataset):
             1, int(np.prod(self._imgs.shape[1:3]) / np.prod(self._size))
         )
 
-    def _reject_background(self, threshold=0.02, max_iterations=10):
-        rc = transforms.RandomCrop(
-            self._size,
-            padding_mode="reflect",
-            pad_if_needed=True,
-        )
+        if self._binarize:
+            logger.debug("Binarize images")
+            self._imgs = (self._imgs > 0).astype(np.float32)
+        else:
+            logger.debug("Normalize images")
+            if self._normalize is None:
+                self._imgs = self._default_normalize(self._imgs)
+            else:
+                self._imgs = self._normalize(self._imgs)
 
-        def smoother(img):
-            img = skimage.util.img_as_ubyte(img.squeeze(1).numpy().clip(-1, 1))
-            img = skimage.filters.rank.median(
-                img, footprint=np.ones((self._n_frames, 3, 3))
-            )
-            return torch.as_tensor(skimage.util.img_as_float32(img)).unsqueeze(1)
+    # def _reject_background(self, threshold=0.02, max_iterations=10):
+    #     rc = transforms.RandomCrop(
+    #         self._size,
+    #         padding_mode="reflect",
+    #         pad_if_needed=True,
+    #     )
 
-        def crop(x):
-            with torch.no_grad():
-                for i in range(max_iterations):
-                    out = rc(x)
-                    mask = smoother(out)
-                    if mask.std() > threshold:
-                        return out
-                    # logger.debug(f"Reject {i}")
-                return out
+    #     def smoother(img):
+    #         img = skimage.util.img_as_ubyte(img.squeeze(1).numpy().clip(-1, 1))
+    #         img = skimage.filters.rank.median(
+    #             img, footprint=np.ones((self._n_frames, 3, 3))
+    #         )
+    #         return torch.as_tensor(skimage.util.img_as_float32(img)).unsqueeze(1)
 
-        return crop
+    #     def crop(x):
+    #         with torch.no_grad():
+    #             for i in range(max_iterations):
+    #                 out = rc(x)
+    #                 mask = smoother(out)
+    #                 if mask.std() > threshold:
+    #                     return out
+    #                 # logger.debug(f"Reject {i}")
+    #             return out
+
+    #     return crop
 
     def _default_normalize(self, imgs):
         """Default normalization.
@@ -178,17 +200,17 @@ class TarrowDataset(Dataset):
             ndarray
 
         """
-        imgs_norm = []
-        for img in tqdm(imgs, desc="normalizing images", leave=False):
-            imgs_norm.append(utils_normalize(img, subsample=8))
-        return np.stack(imgs_norm)
+        # imgs_norm = []
+        # for img in imgs:
+        #     imgs_norm.append(utils_normalize(img, subsample=8))
+        # return np.stack(imgs_norm)
+
+        return utils_normalize(imgs)
 
     def _load_zarr(self, path):
 
         logger.info(f"Loading {path}")
         imgs = zarr.open(str(path), mode="r")
-        logger.info("Done")
-
         return imgs
     
     def _crop_from_annotations(self, imgs, annotations, crop_size, tslices, annotation_range):
@@ -218,6 +240,8 @@ class TarrowDataset(Dataset):
     def __getitem__(self, idx):
 
         imgs_shape = self._imgs.shape
+        assert (type(self._crop_size[0]) == int), (type(self._crop_size[0]), self._crop_size[0])
+        assert (type(imgs_shape[4]) == type(self._crop_size[1])), (type(imgs_shape[4]), type(self._crop_size[1]))
         if imgs_shape[3] < self._crop_size[0] or imgs_shape[4] < self._crop_size[1]:
             raise ValueError("Crop size must be smaller than image size")
         
@@ -233,16 +257,6 @@ class TarrowDataset(Dataset):
             x = self._imgs[self.tslices[t], :,  0, i - self._crop_size[0]//2:i + self._crop_size[0]//2, j - self._crop_size[1]//2:j + self._crop_size[1]//2]
         elif self._annotations is not None:
             x = self._crop_from_annotations(self._imgs, self._annotations, self._crop_size, self.tslices, self._annotation_range)
-
-        if self._binarize:
-            logger.debug("Binarize images")
-            x = (x > 0).astype(np.float32)
-        else:
-            #logger.debug("Normalize images")
-            if self._normalize is None:
-                x = self._default_normalize(x)
-            else:
-                x = self._normalize(x)
 
         x = torch.tensor(x, dtype=torch.float32)
 

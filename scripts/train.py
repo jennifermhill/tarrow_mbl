@@ -119,9 +119,7 @@ def get_argparser():
     p.add("--random_crop", type=tarrow.utils.str2bool, default=True)
     p.add("--crop_size", type=int, nargs=2, default=[128, 128], help="Patch size for training.")
     p.add(
-        "--cam_size",
-        type=int,
-        default=None,
+        "--cam_size", type=int, nargs=2, default=[128,128],
         help="Patch size for CAM visualization. If not given, full images are used.",
     )
     p.add("--batchsize", type=int, default=128)
@@ -277,11 +275,9 @@ def _build_dataset(
         annotation_range=args.annotation_range,
     )
 
-
 def _subset(data: Dataset, split=(0, 1.0)):
     low, high = int(len(data) * split[0]), int(len(data) * split[1])
     return Subset(data, range(low, high))
-
 
 def _create_loader(dataset, args, num_samples, num_workers, idx=None, sequential=False):
     return torch.utils.data.DataLoader(
