@@ -4,6 +4,7 @@ import platform
 from pathlib import Path
 from datetime import datetime
 import yaml
+import ast
 import git
 import configargparse
 import time
@@ -40,7 +41,7 @@ def get_argparser():
         help="Config file path (other given arguments will superseed this).",
     )
     p.add("--name", type=str, default=None, help="Name of the training run.")
-    p.add("--annotations", type=str, nargs="+", default=None, help="List of json files with annotations.")
+    p.add("--train_annotations", type=str, nargs="+", default=None, help="List of [t, z, y, x] annotations in training dataset.")
     p.add(
         "--input_train",
         type=str,
@@ -51,6 +52,7 @@ def get_argparser():
             " sequences of 2d images."
         ),
     )
+    p.add("--val_annotations", type=str, nargs="+", default=None, help="List of [t, z, y, x] annotations in validation dataset.")
     p.add(
         "--input_val",
         type=str,
@@ -77,6 +79,12 @@ def get_argparser():
         action="append",
         required=True,
         help="Same as `--split_val`.",
+    )
+    p.add(
+        "--annotation_range",
+        type=int,
+        default=30,
+        help="Range of time points ahead of annotation to consider.",
     )
     p.add("-e", "--epochs", type=int, default=200)
     p.add("--seed", type=int, default=42)
@@ -246,7 +254,8 @@ def _build_dataset(
     delta_frames,
     augmenter=None,
     permute=True,
-    random_crop=True
+    random_crop=True,
+    annotations=None
 ):
     return TarrowDataset(
         imgs=imgs,
@@ -264,6 +273,8 @@ def _build_dataset(
         binarize=args.binarize,
         crop_size=args.crop_size,
         random_crop=random_crop,
+        annotations=annotations,
+        annotation_range=args.annotation_range,
     )
 
 
@@ -374,6 +385,7 @@ def main(args):
             raise NotImplementedError("Multi-GPU training not implemented yet.")
     else:
         device = torch.device("cuda")
+    logger.info(f"Using device {device}")
 
     augmenter = get_augmenter(args.augment)
 
@@ -382,7 +394,15 @@ def main(args):
         inputs[phase] = _get_paths_recursive(inp, args.read_recursion_level)
         logger.debug(f"{phase} datasets: {inputs[phase]}")
 
+    if args.train_annotations:
+        train_annotations = [ast.literal_eval(x) for x in args.train_annotations]
+        logger.info(f"Training annotations: {train_annotations}, dtype: {type(train_annotations)}")
+    if args.val_annotations:
+        val_annotations = [ast.literal_eval(x) for x in args.val_annotations]
+        logger.info(f"Validation annotations: {val_annotations}, dtype: {type(val_annotations)}")
+
     logger.info("Build visualisation datasets.")
+    logger.info(f"inputs[train][0]: {inputs['train'][0]}, inputs[val][0]: {inputs['val'][0]}")
     data_visuals = tuple(
         _build_dataset(
             inp,
@@ -392,8 +412,9 @@ def main(args):
             delta_frames=args.delta[-1:],
             permute=False,
             random_crop=False,
+            annotations=annotations,
         )
-        for inp in set([inputs["train"][0], inputs["val"][0]])
+        for inp, annotations in zip([inputs["train"][0], inputs["val"][0]], [train_annotations, val_annotations])
         # for inp in set([*inputs["train"], *inputs["val"]])
         # for inp in inputs["val"][-1:]
     )
@@ -408,6 +429,7 @@ def main(args):
             delta_frames=args.delta,
             augmenter=augmenter,
             random_crop=args.random_crop,
+            annotations=train_annotations,
         )
         for split in args.split_train
         for inp in inputs["train"]
@@ -422,6 +444,7 @@ def main(args):
                 args=args,
                 n_frames=args.frames,
                 delta_frames=args.delta,
+                annotations=val_annotations,
             )
             for split in args.split_val
             for inp in inputs["val"]
@@ -468,6 +491,9 @@ def main(args):
         yaml.dump(vars(args), f)
 
     assert args.ndim == 2
+
+    logger.info(f"Visual datasets: {data_visuals}")
+    logger.info(f"Visual dataset lengths: {[len(d) for d in data_visuals]}")
 
     model.fit(
         loader_train=loader_train,

@@ -1,11 +1,10 @@
-name: dicty
+name: dicty_annotation_sampling
 epochs: 10
 augment: 5
 batchsize: 152
 random_crop: False
 crop_size: [128, 128]
 channels: 2
-cam_size: 960
 backbone: unet
 features: 32
 train_samples_per_epoch: 1000
@@ -13,13 +12,15 @@ save_checkpoint_every: 1
 num_workers: 12
 projhead: minimal_batchnorm
 classhead: minimal
-frames: 2
+frames: 5
+cam_subsampling: 1
 delta:
 - 1
-annotations:
-- /groups/sgro/sgrolab/jennifer/predicty/training_data.json
+visual_dataset_frequency: 1
+train_annotations: [[94, 0, 1129, 1143], [105, 6, 1211, 227], [55, 10, 850, 993], [129, 2, 1690, 240], [117, 4, 374, 1278], [57, 5, 1044, 828], [114, 6, 656, 411], [124, 10, 64, 128]]
 input_train:
 - /groups/sgro/sgrolab/jennifer/cryolite/cryolite_mixin_test66_2024-04-30/analysis/max_projections/maxz
+val_annotations: [[188, 29, 1084, 428], [136, 10, 1554, 1229], [354, 156, 511, 495], [403, 12, 82, 1348], [341, 44, 1161, 457], [337, 190, 817, 1136], [169, 8, 229, 1334]]
 input_val:
 - /groups/sgro/sgrolab/jennifer/cryolite/cryolite_mixin_test62_2024-03-08/analysis/max_projections/maxz
 split_train:
@@ -28,3 +29,4 @@ split_train:
 split_val:
 - 0.0
 - 1.0
+annotation_range: 30
