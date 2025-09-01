@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 import bisect
+from pyparsing import annotations
 from tqdm import tqdm
 import zarr
 import numpy as np
@@ -17,8 +18,8 @@ class TarrowDataset(Dataset):
     def __init__(
         self,
         imgs,
-        split_start=None,
-        split_end=None,
+        split_start=0,
+        split_end=1,
         n_images=None,
         n_frames=2,
         delta_frames=[1],
@@ -76,6 +77,8 @@ class TarrowDataset(Dataset):
 
         super().__init__()
         
+        self._split_start = split_start
+        self._split_end = split_end
         self._n_images = n_images
         self._n_frames = n_frames
         self._delta_frames = delta_frames
@@ -101,17 +104,6 @@ class TarrowDataset(Dataset):
         if isinstance(imgs, (str, Path)):
             self._imgs = self._load_zarr(path=imgs)
 
-            if split_start is None:
-                self._split_start = 0
-            else:
-                self._split_start = split_start
-
-            if split_end is None:
-                self._split_end = self._imgs.shape[0]
-            else:
-                self._split_end = split_end
-            
-            self._imgs = self._imgs[split_start:split_end]
         else:
             raise ValueError(
                 f"Cannot form a dataset from {imgs}. "
@@ -142,25 +134,16 @@ class TarrowDataset(Dataset):
             )
         
         for delta in self._delta_frames:
+            print(delta)
             n, k = self._n_frames, delta
             logger.debug(f"Creating delta {delta} crops")
-            self.tslices = tuple(
+            self._tslices = tuple(
                 slice(i, i + k * (n - 1) + 1, k) for i in range(self._imgs.shape[0] - (n - 1) * k)
             )
 
         self._crops_per_image = max(
             1, int(np.prod(self._imgs.shape[1:3]) / np.prod(self._size))
         )
-
-        if self._binarize:
-            logger.debug("Binarize images")
-            self._imgs = (self._imgs > 0).astype(np.float32)
-        else:
-            logger.debug("Normalize images")
-            if self._normalize is None:
-                self._imgs = self._default_normalize(self._imgs)
-            else:
-                self._imgs = self._normalize(self._imgs)
 
     # def _reject_background(self, threshold=0.02, max_iterations=10):
     #     rc = transforms.RandomCrop(
@@ -200,12 +183,10 @@ class TarrowDataset(Dataset):
             ndarray
 
         """
-        # imgs_norm = []
-        # for img in imgs:
-        #     imgs_norm.append(utils_normalize(img, subsample=8))
-        # return np.stack(imgs_norm)
-
-        return utils_normalize(imgs)
+        imgs_norm = []
+        for img in imgs:
+            imgs_norm.append(utils_normalize(img, subsample=8))
+        return np.stack(imgs_norm)
 
     def _load_zarr(self, path):
 
@@ -213,29 +194,23 @@ class TarrowDataset(Dataset):
         imgs = zarr.open(str(path), mode="r")
         return imgs
     
-    def _crop_from_annotations(self, imgs, annotations, crop_size, tslices, annotation_range):
-        # randomly choose annotation location
-        annot_idx = np.random.randint(0, len(annotations))
-        annot = annotations[annot_idx]
-        # randomly choose time slice before annotation time point
-        t_min = max(0, annot[0]-annotation_range)
-        t_max = min(len(tslices),annot[0])
-        print(t_min, t_max)
-        t = np.random.randint(t_min, t_max)
+    def _crop_from_annotations(self, img_sequence, annot, crop_size):
+
         # check if the crop will be out of range in x or y and shift away from edge if true
         if annot[2] - crop_size[0]//2 < 0:
             annot[2] = crop_size[0]//2
         if annot[3] - crop_size[1]//2 < 0:
             annot[3] = crop_size[1]//2
-        if annot[2] + crop_size[0]//2 > imgs.shape[3]:
-            annot[2] = imgs.shape[3] - crop_size[0]//2
-        if annot[3] + crop_size[1]//2 > imgs.shape[4]:
-            annot[3] = imgs.shape[4] - crop_size[1]//2
-        print(f"imgs.shape = {self._imgs.shape}, t = {t}, len(tslices) = {len(tslices)}, annot = {annot}")
-        return imgs[tslices[t], :, 0, annot[2] - crop_size[0]//2:annot[2] + crop_size[0]//2, annot[3] - crop_size[1]//2:annot[3] + crop_size[1]//2]
+        if annot[2] + crop_size[0]//2 > img_sequence.shape[3]:
+            annot[2] = img_sequence.shape[3] - crop_size[0]//2
+        if annot[3] + crop_size[1]//2 > img_sequence.shape[4]:
+            annot[3] = img_sequence.shape[4] - crop_size[1]//2
+        return img_sequence[:, :, 0,
+               annot[2] - crop_size[0]//2:annot[2] + crop_size[0]//2,
+               annot[3] - crop_size[1]//2:annot[3] + crop_size[1]//2]
 
     def __len__(self):
-        return len(self.tslices)
+        return len(self._tslices)
 
     def __getitem__(self, idx):
 
@@ -245,18 +220,38 @@ class TarrowDataset(Dataset):
         if imgs_shape[3] < self._crop_size[0] or imgs_shape[4] < self._crop_size[1]:
             raise ValueError("Crop size must be smaller than image size")
         
-        # Precompute the time slices
-        self._imgs_sequences = []
-        
-        # Get a random crop
+        # Get a random tslice
         if self._random_crop:
-            t = np.random.randint(0, len(self.tslices))
+            t = np.random.randint(0, len(self._tslices))
+        else:
+            # randomly choose annotation location
+            annot_idx = np.random.randint(0, len(self._annotations))
+            annot = self._annotations[annot_idx]
+            t_min = max(0, annot[0]-self._annotation_range)
+            t_max = min(len(self._tslices),annot[0])
+            t = np.random.randint(t_min, t_max)
+        tslice = self._tslices[t]
+        img_sequence = self._imgs[tslice]
+
+        # Binarize and normalize
+        if self._binarize:
+            #logger.debug("Binarize images")
+            img_sequence = (img_sequence > 0).astype(np.float32)
+        else:
+            #logger.debug("Normalize images")
+            if self._normalize is None:
+                img_sequence = self._default_normalize(img_sequence)
+            else:
+                img_sequence = self._normalize(img_sequence)
+
+        # Get a (random) crop
+        if self._random_crop:
             i = np.random.randint(self._crop_size[0]//2, imgs_shape[3] - self._crop_size[0]//2 + 1)
             j = np.random.randint(self._crop_size[1]//2, imgs_shape[4] - self._crop_size[1]//2 + 1)
             # Get the cropped image
-            x = self._imgs[self.tslices[t], :,  0, i - self._crop_size[0]//2:i + self._crop_size[0]//2, j - self._crop_size[1]//2:j + self._crop_size[1]//2]
-        elif self._annotations is not None:
-            x = self._crop_from_annotations(self._imgs, self._annotations, self._crop_size, self.tslices, self._annotation_range)
+            x = img_sequence[:, :, 0, i - self._crop_size[0]//2:i + self._crop_size[0]//2, j - self._crop_size[1]//2:j + self._crop_size[1]//2]
+        else:
+            x = self._crop_from_annotations(img_sequence, annot, self._crop_size)
 
         x = torch.tensor(x, dtype=torch.float32)
 

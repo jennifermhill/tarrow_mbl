@@ -5,12 +5,14 @@ from tarrow.data import get_augmenter
 import matplotlib.pyplot as plt
 import zarr
 
+
 # %%
 
 aug = get_augmenter(5)
 dataset = TarrowDataset(
     imgs="/Volumes/sgrolab/jennifer/cryolite/cryolite_mixin_test66_2024-04-30/analysis/max_projections/maxz",
     delta_frames=[5],
+    n_frames=5,
     mode="flip",
     augmenter=aug,
     random_crop=False,

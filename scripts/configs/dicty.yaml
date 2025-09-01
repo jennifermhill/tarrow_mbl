@@ -1,14 +1,14 @@
 name: dicty_annotation_sampling
 epochs: 10
 augment: 5
-batchsize: 152
+batchsize: 500
 random_crop: False
 crop_size: [128, 128]
 channels: 2
 backbone: unet
 features: 32
-train_samples_per_epoch: 1000
-save_checkpoint_every: 1
+train_samples_per_epoch: 1000 # Can't be smaller than batchsize
+save_checkpoint_every: 2
 num_workers: 12
 projhead: minimal_batchnorm
 classhead: minimal

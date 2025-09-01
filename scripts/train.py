@@ -1,3 +1,9 @@
+import os
+os.environ["MPLBACKEND"] = "Agg"
+
+import matplotlib
+matplotlib.use("Agg")     # must happen before: import matplotlib.pyplot as plt
+
 from typing import Sequence
 import logging
 import platform
