@@ -259,6 +259,7 @@ def _build_dataset(
     augmenter=None,
     permute=True,
     random_crop=True,
+    vis_crop=False,
     annotations=None
 ):
     return TarrowDataset(
@@ -277,6 +278,7 @@ def _build_dataset(
         binarize=args.binarize,
         crop_size=args.crop_size,
         random_crop=random_crop,
+        vis_crop=vis_crop,
         annotations=annotations,
         annotation_range=args.annotation_range,
     )
@@ -414,6 +416,7 @@ def main(args):
             delta_frames=args.delta[-1:],
             permute=False,
             random_crop=False,
+            vis_crop=True,
             annotations=annotations,
         )
         for inp, annotations in zip([inputs["train"][0], inputs["val"][0]], [train_annotations, val_annotations])
@@ -509,6 +512,7 @@ def main(args):
             Subset(d, list(range(0, len(d), 1 + (len(d) // args.cam_subsampling))))
             for d in data_visuals
         ),
+        visual_annotations= tuple(d._annotations for d in data_visuals),
         visual_dataset_frequency=args.visual_dataset_frequency,
         tensorboard=args.tensorboard > 0,
         save_checkpoint_every=args.save_checkpoint_every,

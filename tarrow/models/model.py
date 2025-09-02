@@ -463,6 +463,7 @@ class TimeArrowNet(nn.Module):
         steps_per_epoch,
         lr_scheduler="plateau",
         visual_datasets=(),
+        visual_annotations=(),
         visual_dataset_frequency=10,
         tensorboard=True,
         save_checkpoint_every=100,
@@ -527,12 +528,12 @@ class TimeArrowNet(nn.Module):
 
         # save visuals (e.g. cams) in model folder and tensorboard
         def _save_visuals(
-            dataset: Sequence[Dataset], tb_writer, epoch: int, save_features=False
+            dataset: Sequence[Dataset], annotations, tb_writer, epoch: int, save_features=False
         ):
             n_insets = 8
             inset_size = 48
 
-            for i, data in enumerate(dataset):
+            for (i, data), annotations in zip(enumerate(dataset), annotations):
                 vis = create_visuals(
                     dataset=data,
                     model=self,
@@ -548,13 +549,19 @@ class TimeArrowNet(nn.Module):
                         total=len(vis.raw_with_time),
                         leave=True,
                     ):
-                        fig, _, _ = cam_insets(
+                        fig, ax, _ = cam_insets(
                             xs=raw_with_time,
                             cam=cam,
                             n_insets=n_insets,
                             w_inset=inset_size,
                             main_frame=0,
                         )
+
+                        if annotations is not None:
+                            annot_coords = [annot[2:] for annot in annotations]
+                            points = np.array(annot_coords)
+                            ax.scatter(points[:, 1], points[:, 0], c="red", alpha=0.8)
+
                         tb_writer["cams"].add_figure(
                             f"dataset_{i}/{j}", fig, global_step=epoch
                         )
@@ -573,7 +580,7 @@ class TimeArrowNet(nn.Module):
                                     global_step=k,
                                 )
 
-        def _model_step(loader, phase="train", title="Training"):
+        def _model_step(loader, phase="train", title="Training", max_steps=135):
             start = now()
             if phase == "train":
                 self.train()
@@ -586,7 +593,10 @@ class TimeArrowNet(nn.Module):
             with torch.set_grad_enabled(phase == "train"):
                 pbar = tqdm(loader, leave=False)
 
-                for x, y in pbar:
+                for i, (x, y) in enumerate(pbar):
+                    if i >= max_steps:
+                        break
+
                     x, y = x.to(self.device), y.to(self.device)
 
                     if phase == "train":
@@ -683,7 +693,7 @@ class TimeArrowNet(nn.Module):
 
             if self.outdir is not None:
                 if visual_dataset_frequency > 0 and i % visual_dataset_frequency == 0:
-                    _save_visuals(visual_datasets, tb_writer, epoch=i)
+                    _save_visuals(visual_datasets, visual_annotations, tb_writer, epoch=i)
 
             with open(self.outdir / "losses.json", "wt") as f:
                 json.dump(metrics, f)
@@ -710,7 +720,7 @@ class TimeArrowNet(nn.Module):
                 self.save(which="both", exist_ok=True)
 
         if tb_writer is not None:
-            _save_visuals(visual_datasets, tb_writer, epoch=i, save_features=True)
+            _save_visuals(visual_datasets, visual_annotations, tb_writer, epoch=i, save_features=True)
 
         if tb_writer is not None:
             for tbw in tb_writer.values():

@@ -33,6 +33,7 @@ class TarrowDataset(Dataset):
         binarize=False,
         crop_size=[128, 128],
         random_crop=True,
+        vis_crop=False,
         annotations=None,
         annotation_range=30,
     ):
@@ -96,6 +97,7 @@ class TarrowDataset(Dataset):
         self._augmenter = augmenter
         self._normalize = normalize
         self._random_crop = random_crop
+        self._vis_crop = vis_crop
         self._annotations = annotations
         self._annotation_range = annotation_range
         if self._augmenter is not None:
@@ -134,7 +136,6 @@ class TarrowDataset(Dataset):
             )
         
         for delta in self._delta_frames:
-            print(delta)
             n, k = self._n_frames, delta
             logger.debug(f"Creating delta {delta} crops")
             self._tslices = tuple(
@@ -244,14 +245,17 @@ class TarrowDataset(Dataset):
             else:
                 img_sequence = self._normalize(img_sequence)
 
-        # Get a (random) crop
-        if self._random_crop:
-            i = np.random.randint(self._crop_size[0]//2, imgs_shape[3] - self._crop_size[0]//2 + 1)
-            j = np.random.randint(self._crop_size[1]//2, imgs_shape[4] - self._crop_size[1]//2 + 1)
-            # Get the cropped image
-            x = img_sequence[:, :, 0, i - self._crop_size[0]//2:i + self._crop_size[0]//2, j - self._crop_size[1]//2:j + self._crop_size[1]//2]
+        if not self._vis_crop:
+            # Get a (random) crop
+            if self._random_crop:
+                i = np.random.randint(self._crop_size[0]//2, imgs_shape[3] - self._crop_size[0]//2 + 1)
+                j = np.random.randint(self._crop_size[1]//2, imgs_shape[4] - self._crop_size[1]//2 + 1)
+                # Get the cropped image
+                x = img_sequence[:, :, 0, i - self._crop_size[0]//2:i + self._crop_size[0]//2, j - self._crop_size[1]//2:j + self._crop_size[1]//2]
+            else:
+                x = self._crop_from_annotations(img_sequence, annot, self._crop_size)
         else:
-            x = self._crop_from_annotations(img_sequence, annot, self._crop_size)
+            x = img_sequence[:, :, 0, :, :]
 
         x = torch.tensor(x, dtype=torch.float32)
 
