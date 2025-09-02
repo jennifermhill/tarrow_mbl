@@ -1,7 +1,7 @@
 name: dicty_annotation_sampling
-epochs: 10
+epochs: 100
 augment: 5
-batchsize: 500
+batchsize: 100
 random_crop: False
 crop_size: [128, 128]
 channels: 2
@@ -12,7 +12,6 @@ save_checkpoint_every: 2
 num_workers: 12
 projhead: minimal_batchnorm
 classhead: minimal
-frames: 5
 cam_subsampling: 1
 delta:
 - 1
@@ -29,4 +28,4 @@ split_train:
 split_val:
 - 0.0
 - 1.0
-annotation_range: 30
+annotation_range: 60
