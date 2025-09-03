@@ -126,6 +126,7 @@ class TimeArrowNet(nn.Module):
             in_features=n_features,
             n_frames=n_frames,
             out_features=n_features,
+            # CV: Why is n_classes == n_frames instead of 2?
             n_classes=n_frames,
             mode=classification_head,
             symmetric=symmetric,
@@ -592,8 +593,8 @@ class TimeArrowNet(nn.Module):
                         optimizer.zero_grad()
 
                     out, pro = self(x, mode="both")
-
                     if out.ndim > 2:
+                        
                         y = torch.broadcast_to(
                             y.unsqueeze(1).unsqueeze(1), (y.shape[0],) + out.shape[-2:]
                         )
@@ -607,7 +608,6 @@ class TimeArrowNet(nn.Module):
                         loss = criterion(out, y)
 
                     pred = torch.argmax(u_avg.detach(), 1)
-
                     loss = torch.mean(loss)
 
                     # decorrelation loss

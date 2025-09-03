@@ -35,7 +35,10 @@ def get_augmenter(augment_id: int) -> torch.nn.Module:
             RandomNoise(probability=prob),
             # frame by frame intensity shift
             RandomIntensity(
-                shift=(-0.05, 0.05), scale=(9 / 10, 10 / 9), axis=0, probability=prob
+                shift=(-0.05, 0.05), 
+                scale=(9 / 10, 10 / 9), 
+                # axis=0, 
+                probability=prob
             ),
             # global intensity shift
             RandomIntensity(shift=(-0.1, 0.1), scale=(4 / 5, 5 / 4), probability=prob),
@@ -48,7 +51,10 @@ def get_augmenter(augment_id: int) -> torch.nn.Module:
             RandomNoise(probability=prob),
             # frame by frame intensity shift
             RandomIntensity(
-                shift=(-0.05, 0.05), scale=(9 / 10, 10 / 9), axis=0, probability=prob
+                shift=(-0.05, 0.05), 
+                scale=(9 / 10, 10 / 9),
+                # axis=0, 
+                probability=prob
             ),
             # global intensity shift
             RandomIntensity(shift=(-0.1, 0.1), scale=(4 / 5, 5 / 4), probability=prob),
@@ -58,12 +64,18 @@ def get_augmenter(augment_id: int) -> torch.nn.Module:
         aug = torch.nn.Sequential(
             RandomFlipRot(),
             RandomRotate(probability=prob),
-            RandomAffine(axis=0, scale=(9 / 10, 10 / 9), probability=prob),
+            RandomAffine(
+                # axis=0, 
+                scale=(9 / 10, 10 / 9), 
+                probability=prob),
             RandomElastic(probability=prob),
             RandomNoise(probability=prob),
             # frame by frame intensity shift
             RandomIntensity(
-                shift=(-0.05, 0.05), scale=(9 / 10, 10 / 9), axis=0, probability=prob
+                shift=(-0.05, 0.05), 
+                scale=(9 / 10, 10 / 9), 
+                # axis=0, 
+                # probability=prob
             ),
             # global intensity shift
             RandomIntensity(shift=(-0.1, 0.1), scale=(4 / 5, 5 / 4), probability=prob),
@@ -80,7 +92,7 @@ def get_augmenter(augment_id: int) -> torch.nn.Module:
                 probability=prob,
             ),
             RandomAffine(
-                axis=0,
+                # axis=0,
                 translate=(0.03, 0.03),
                 scale=(9 / 10, 10 / 9),
                 probability=prob,
@@ -89,7 +101,10 @@ def get_augmenter(augment_id: int) -> torch.nn.Module:
             RandomNoise(probability=prob),
             # frame by frame intensity shift
             RandomIntensity(
-                shift=(-0.05, 0.05), scale=(9 / 10, 10 / 9), axis=0, probability=prob
+                shift=(-0.05, 0.05), 
+                scale=(9 / 10, 10 / 9), 
+                # axis=0, 
+                probability=prob
             ),
             # global intensity shift
             RandomIntensity(shift=(-0.1, 0.1), scale=(4 / 5, 5 / 4), probability=prob),

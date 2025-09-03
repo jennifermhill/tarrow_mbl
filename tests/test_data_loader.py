@@ -23,7 +23,6 @@ fig, axs = plt.subplots(1,2,figsize=(12,10))
 axs[0].imshow(torch.squeeze(img)[0])
 axs[1].imshow(torch.squeeze(img)[1])
 
-
 # %%
 import zarr
 path = "/mnt/efs/aimbl_2025/student_data/S-CV/pre/zarr/C02"
@@ -32,4 +31,3 @@ print(type(imgs))
 print(imgs.shape)
 imgs_sliced = imgs[15:]
 print(imgs_sliced.shape)
-# %%

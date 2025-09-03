@@ -1,23 +1,20 @@
-name: Exp001
+name: Exp004
 epochs: 10
 augment: 5
-batchsize: 25
+batchsize: 30
 crop_size: [128, 128]
-delta: [1]
-frames: 5
+delta: [1,2,3,4,5]
+frames: 2
 visual_dataset_frequency: 1
 cam_subsampling: 2
+cam_size: None
 backbone: unet
 features: 32
 train_samples_per_epoch: 50000
-val_samples_per_epoch: 2000
+val_samples_per_epoch: 3000
 num_workers: 8
 projhead: minimal_batchnorm
 classhead: minimal
-input_train: /mnt/efs/aimbl_2025/student_data/S-CV/pre/zarr/C02
-split_train:
-- - 0.0
-  - 1.0
-split_val:
-- 0.0
-- 1.0
+input_train: /mnt/efs/aimbl_2025/student_data/S-CV/pre/zarr/B02
+split_train: [0, 301]
+split_val: [0, 301]

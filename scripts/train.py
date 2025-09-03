@@ -63,18 +63,16 @@ def get_argparser():
     p.add("--read_recursion_level", type=int, default=0)
     p.add(
         "--split_train",
-        type=float,
+        type=int,
         nargs=2,
-        action="append",
-        required=True,
+        required=False,
         help="Relative split of training data as (start, end).",
     )
     p.add(
         "--split_val",
-        type=float,
-        nargs="+",
-        action="append",
-        required=True,
+        type=int,
+        nargs=2,
+        required=False,
         help="Same as `--split_val`.",
     )
     p.add("-e", "--epochs", type=int, default=200)
@@ -110,7 +108,7 @@ def get_argparser():
     p.add("--size", type=int, default=96, help="1D patch size for training.")
     p.add("--crop_size", type=int, nargs=2, default=[128,128], help="Patch size for training")
     p.add(
-        "--cam_size", type=int, nargs=2, default=[128,128],
+        "--cam_size", nargs="+", default=None,
         help="Patch size for CAM visualization. If not given, full images are used.",
     )
     p.add("--batchsize", type=int, default=128)
@@ -334,6 +332,9 @@ def _write_cams(data_visuals, model, device):
 
 
 def main(args):
+    if args.cam_size == ['None']:
+        args.cam_size = None
+
     if platform.system() == "Darwin":
         args.num_workers = 0
         logger.warning(
@@ -375,7 +376,7 @@ def main(args):
     data_visuals = tuple(
         _build_dataset(
             inp,
-            split=(0, 1.0),
+            split=[40, 301],
             crop_size=None if args.cam_size is None else args.cam_size,
             args=args,
             n_frames=args.frames,
@@ -383,7 +384,7 @@ def main(args):
             permute=False,
             random_crop=False,
         )
-        for inp in [[inputs["train"][0], inputs["val"][0]]]
+        for inp in set([inputs["train"][0], inputs["val"][0]])
         # for inp in set([*inputs["train"], *inputs["val"]])
         # for inp in inputs["val"][-1:]
     )
@@ -392,14 +393,14 @@ def main(args):
     data_train = ConcatDataset(
         _build_dataset(
             inp,
-            split=split,
+            split=[40,301],
             crop_size=args.crop_size,
             args=args,
             n_frames=args.frames,
             delta_frames=args.delta,
             augmenter=augmenter
         )
-        for split in args.split_train
+        
         for inp in inputs["train"]
     )
 
@@ -408,13 +409,12 @@ def main(args):
         (
             _build_dataset(
                 inp,
-                split,
+                split=[40,301],
                 crop_size=args.crop_size,
                 args=args,
                 n_frames=args.frames,
                 delta_frames=args.delta,
             )
-            for split in args.split_val
             for inp in inputs["val"]
         )
     )
